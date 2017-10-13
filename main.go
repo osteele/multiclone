@@ -8,7 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
+	"regexp"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
@@ -21,15 +21,17 @@ var (
 	jobs    = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
 	nwo     = kingpin.Arg("repo", "GitHub owner/repo").String()
 	dir     = kingpin.Arg("directory", "The name of the directory to clone into.").Default(".").String()
+
+	repo_re = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
 
 func main() {
 	kingpin.Parse()
-	parts := strings.Split(*nwo, "/")
-	if len(parts) != 2 {
+	m := repo_re.FindStringSubmatch(*nwo)
+	if m == nil {
 		kingpin.FatalUsage("repo must be in the format owner/repo")
 	}
-	if err := run(parts[0], parts[1], *dir); err != nil {
+	if err := run(m[1], m[2], *dir); err != nil {
 		panic(err)
 	}
 }

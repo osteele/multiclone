@@ -5,6 +5,11 @@ assignments and student projects.
 
 ## Usage
 
+Create a [GitHub personal access token for the command line](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/),
+and set `GITHUB_TOKEN` to this value.
+
+    export GITHUB_TOKEN=…
+    multiclone https://github.com/owner/reponame [directory]
     multiclone owner/reponame [directory]
     multiclone --help
 
