@@ -23,21 +23,6 @@ var (
 	dir     = kingpin.Arg("directory", "The name of the directory to clone into.").Default(".").String()
 )
 
-var repoQuery struct {
-	// https://developer.github.com/v4/reference/object/repository/
-	Repository struct {
-		Description githubql.String
-		Forks       struct {
-			Nodes []struct {
-				URL   githubql.String
-				Owner struct {
-					Login githubql.String
-				}
-			}
-		} `graphql:"forks(first: 2)"`
-	} `graphql:"repository(owner: $owner, name: $name)"`
-}
-
 func main() {
 	kingpin.Parse()
 	parts := strings.Split(*nwo, "/")
@@ -49,7 +34,28 @@ func main() {
 	}
 }
 
-func run(owner, name, dir string) error {
+type repoNode struct {
+	URL   githubql.String
+	Owner struct {
+		Login githubql.String
+	}
+}
+
+var repoQuery struct {
+	// https://developer.github.com/v4/reference/object/repository/
+	Repository struct {
+		Description githubql.String
+		Forks       struct {
+			Nodes    []repoNode
+			PageInfo struct {
+				EndCursor   githubql.String
+				HasNextPage githubql.Boolean
+			}
+		} `graphql:"forks(first: 2, after: $commentsCursor)"`
+	} `graphql:"repository(owner: $owner, name: $name)"`
+}
+
+func queryForks(owner, name string) ([]repoNode, error) {
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
 	)
@@ -57,19 +63,36 @@ func run(owner, name, dir string) error {
 
 	client := githubql.NewClient(httpClient)
 	variables := map[string]interface{}{
-		"owner": githubql.String(owner),
-		"name":  githubql.String(name),
-	}
-	if err := client.Query(context.Background(), &repoQuery, variables); err != nil {
-		return err
+		"owner":          githubql.String(owner),
+		"name":           githubql.String(name),
+		"commentsCursor": (*githubql.String)(nil),
 	}
 
+	var repos []repoNode
+	hasNextPage := true
+	for hasNextPage {
+		if err := client.Query(context.Background(), &repoQuery, variables); err != nil {
+			return nil, err
+		}
+		repos = append(repos, repoQuery.Repository.Forks.Nodes...)
+		variables["commentsCursor"] = githubql.NewString(repoQuery.Repository.Forks.PageInfo.EndCursor)
+		hasNextPage = bool(repoQuery.Repository.Forks.PageInfo.HasNextPage)
+	}
+
+	return repos, nil
+}
+
+func run(owner, name, dir string) error {
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
 	}
 
 	results := make(chan []byte, *jobs)
-	for _, repo := range repoQuery.Repository.Forks.Nodes {
+	repos, err := queryForks(owner, name)
+	if err != nil {
+		return err
+	}
+	for _, repo := range repos {
 		dst := filepath.Join(dir, string(repo.Owner.Login))
 		go func(url, dst string) {
 			args := []string{"git", "clone", url, dst}
@@ -85,7 +108,7 @@ func run(owner, name, dir string) error {
 		}(string(repo.URL), dst)
 	}
 
-	for n := len(repoQuery.Repository.Forks.Nodes); n > 0; n-- {
+	for n := len(repos); n > 0; n-- {
 		fmt.Printf("%s\n", <-results)
 	}
 	return nil
