@@ -56,7 +56,7 @@ var repoQuery struct {
 				EndCursor   githubql.String
 				HasNextPage githubql.Boolean
 			}
-		} `graphql:"forks(first: 2, after: $commentsCursor)"`
+		} `graphql:"forks(first: 20, after: $commentsCursor)"`
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
