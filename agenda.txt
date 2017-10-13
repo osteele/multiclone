@@ -1,0 +1,15 @@
+* pagination
+* GITHUB_TOKEN optional
+* README
+* allow https://github.com/
+* --since
+* GitHub classroom
+
+Features:
+* create .mrconfig
+
+* fix lint errors
+
+* error handling
+* pagination
+* retry from rate limits
