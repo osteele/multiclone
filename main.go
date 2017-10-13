@@ -39,19 +39,19 @@ func main() {
 	}
 }
 
-type repoNode struct {
+type repoForksNode struct {
 	URL   githubql.String
 	Owner struct {
 		Login githubql.String
 	}
 }
 
-var repoQuery struct {
+var repoForksQuery struct {
 	// https://developer.github.com/v4/reference/object/repository/
 	Repository struct {
 		Description githubql.String
 		Forks       struct {
-			Nodes    []repoNode
+			Nodes    []repoForksNode
 			PageInfo struct {
 				EndCursor   githubql.String
 				HasNextPage githubql.Boolean
@@ -60,7 +60,7 @@ var repoQuery struct {
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
-func queryForks(owner, name string) ([]repoNode, error) {
+func queryForks(owner, name string) ([]repoForksNode, error) {
 	src := oauth2.StaticTokenSource(
 		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
 	)
@@ -73,15 +73,15 @@ func queryForks(owner, name string) ([]repoNode, error) {
 		"commentsCursor": (*githubql.String)(nil),
 	}
 
-	var repos []repoNode
+	var repos []repoForksNode
 	hasNextPage := true
 	for hasNextPage {
-		if err := client.Query(context.Background(), &repoQuery, variables); err != nil {
+		if err := client.Query(context.Background(), &repoForksQuery, variables); err != nil {
 			return nil, err
 		}
-		repos = append(repos, repoQuery.Repository.Forks.Nodes...)
-		variables["commentsCursor"] = githubql.NewString(repoQuery.Repository.Forks.PageInfo.EndCursor)
-		hasNextPage = bool(repoQuery.Repository.Forks.PageInfo.HasNextPage)
+		repos = append(repos, repoForksQuery.Repository.Forks.Nodes...)
+		variables["commentsCursor"] = githubql.NewString(repoForksQuery.Repository.Forks.PageInfo.EndCursor)
+		hasNextPage = bool(repoForksQuery.Repository.Forks.PageInfo.HasNextPage)
 	}
 
 	return repos, nil
@@ -107,6 +107,7 @@ func run(owner, name, dir string) error {
 			cmd := exec.Command(args[0], args[1:]...)
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
+				// FIXME send to main thread
 				log.Fatal(err)
 			}
 			results <- bytes.TrimSpace(stdoutStderr)
