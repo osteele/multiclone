@@ -1,5 +1,3 @@
-* allow https://github.com/
-
 Features:
 * GitHub classroom
 * create .mrconfig

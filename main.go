@@ -27,12 +27,15 @@ var (
 
 func main() {
 	kingpin.Parse()
+	if *nwo == "" {
+		kingpin.FatalUsage("repo is a required argument")
+	}
 	m := repo_re.FindStringSubmatch(*nwo)
 	if m == nil {
 		kingpin.FatalUsage("repo must be in the format owner/repo")
 	}
 	if err := run(m[1], m[2], *dir); err != nil {
-		panic(err)
+		kingpin.FatalIfError(err, "")
 	}
 }
 
