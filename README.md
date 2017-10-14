@@ -2,10 +2,13 @@
 
 Clone all the forks of a repository, or all the repos of a [GitHub Classroom](https://classroom.github.com) assignment.
 
-Repos are cloned in parallel.
+This is useful for collecting and reviewing assignments and student projects.
 
-This is useful for collecting and reviewing
-assignments and student projects.
+Features:
+
+* Written in Golang for easier distribution. (I got tired juggling of juggling Anaconda / virtualenv between various classroom and tool environments.)
+* Automatic repo discovery. Knows about “students fork” and “GitHub Classroom” conventions.
+* Repos are cloned in parallel.
 
 ## Usage
 
@@ -13,6 +16,10 @@ assignments and student projects.
     multiclone owner/repo [DIR]
 
 Clone forks of owner/repo into DIR (or the current directory).
+
+    multiclone owner/repo [DIR] --dry-run
+
+See the `git` commands that would be run, without actually running them.
 
 ### GitHub Classroom
 
@@ -33,6 +40,16 @@ This is intended for use with repos created via [GitHub Classroom](https://class
 2. `go install github.com/osteele/multiclone`
 3. Create a [GitHub personal access token for the command line](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
 4. Set `GITHUB_TOKEN` to this value: `export GITHUB_TOKEN=…`
+
+## Alternatives
+
+These [GitHub Education Community](https://education.github.community/t/how-to-automatically-gather-or-collect-assignments/2595) forum threads discuss a variety of alternatives (including one I wrote before I wrote this):
+
+* [GitHub Classroom: clone assignments](https://education.github.community/t/github-classroom-clone-assignments/784/1)
+* [How to automatically gather or collect assignments?](https://education.github.community/t/how-to-automatically-gather-or-collect-assignments/2595)
+
+[myrepos](https://myrepos.branchable.com) automates parallel management of a set of
+repos. It doesn't create the initial repo set, which is that this tool does.
 
 ## License
 
