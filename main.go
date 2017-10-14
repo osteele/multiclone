@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"text/template"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
@@ -19,10 +20,11 @@ import (
 
 var (
 	dry_run   = kingpin.Flag("dry-run", "Dry run").Bool()
-	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
 	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
+	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
+	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Bool()
 	nwo       = kingpin.Arg("repo", "GitHub owner/repo").String()
-	dir       = kingpin.Arg("directory", "The name of the directory to clone into.").Default(".").String()
+	dir       = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
 
 	repo_re = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
@@ -37,13 +39,23 @@ func main() {
 		kingpin.FatalUsage("repo must be in the format owner/repo")
 	}
 	owner, name := m[1], m[2]
+	if err := run(owner, name); err != nil {
+		kingpin.FatalIfError(err, "")
+	}
+}
+
+func run(owner, name string) error {
 	repos, err := queryRepos(owner, name)
 	if err != nil {
-		kingpin.FatalIfError(err, "")
+		return err
 	}
 	if err := cloneRepos(repos, name, *dir); err != nil {
-		kingpin.FatalIfError(err, "")
+		return err
 	}
+	if *mrconfig {
+		return writeMrConfig(repos, name, *dir)
+	}
+	return nil
 }
 
 type repoNode struct {
@@ -147,6 +159,13 @@ func queryRepos(owner, name string) ([]repoNode, error) {
 	return queryRepoForks(owner, name)
 }
 
+func repoLocalBasename(repo repoNode, name string) string {
+	if *classroom {
+		return string(repo.Name)[len(name)+1:]
+	}
+	return string(repo.Owner.Login)
+}
+
 func cloneRepos(repos []repoNode, name, dir string) error {
 	if !*dry_run {
 		if err := os.MkdirAll(dir, 0700); err != nil {
@@ -155,10 +174,7 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 	}
 	results := make(chan []byte, *jobs)
 	for _, repo := range repos {
-		dst := filepath.Join(dir, string(repo.Owner.Login))
-		if *classroom {
-			dst = filepath.Join(dir, dst, string(repo.Name)[len(name)+1:])
-		}
+		dst := filepath.Join(dir, repoLocalBasename(repo, name))
 		go func(url, dst string) {
 			args := []string{"git", "clone", url, dst}
 			if *dry_run {
@@ -179,3 +195,29 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 	}
 	return nil
 }
+
+func writeMrConfig(repos []repoNode, name, dir string) error {
+	dst := filepath.Join(dir, ".mrconfig")
+	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0666)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	type RepoEntry struct {
+		Dir, URL string
+	}
+	var repoEntries []RepoEntry
+	for _, repo := range repos {
+		repoEntries = append(repoEntries, RepoEntry{Dir: repoLocalBasename(repo, name), URL: string(repo.URL)})
+	}
+	return mrConfigTpl.Execute(f, repoEntries)
+}
+
+var mrConfigTpl = template.Must(template.New("mrconfig").Parse(`
+{{- range . -}}
+[{{ .Dir }}]
+checkout = git clone {{ .URL }} {{ .Dir }}
+
+{{ end -}}
+`))

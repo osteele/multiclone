@@ -17,10 +17,6 @@ Features:
 
 Clone forks of owner/repo into DIR (or the current directory).
 
-    multiclone owner/repo [DIR] --dry-run
-
-See the `git` commands that would be run, without actually running them.
-
 ### GitHub Classroom
 
     multiclone https://github.com/owner/repo [DIR] --classroom
@@ -30,9 +26,19 @@ Clone org's repos named repo-* into DIR (or the current directory).
 
 This is intended for use with repos created via [GitHub Classroom](https://classroom.github.com).
 
-### Usage
+### Options
+
+    multiclone owner/repo [DIR] --dry-run
+
+See the `git` commands that would be run, without actually running them.
+
+    multiclone owner/repo [DIR] --mrconfig
+
+Write a [myrepos](https://myrepos.branchable.com) `.mrconfig` file into the target directory.
 
     multiclone --help
+
+More options.
 
 ## Install
 
