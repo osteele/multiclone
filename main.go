@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 
@@ -17,10 +18,11 @@ import (
 )
 
 var (
-	dry_run = kingpin.Flag("dry-run", "Dry Run").Bool()
-	jobs    = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
-	nwo     = kingpin.Arg("repo", "GitHub owner/repo").String()
-	dir     = kingpin.Arg("directory", "The name of the directory to clone into.").Default(".").String()
+	dry_run   = kingpin.Flag("dry-run", "Dry run").Bool()
+	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
+	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
+	nwo       = kingpin.Arg("repo", "GitHub owner/repo").String()
+	dir       = kingpin.Arg("directory", "The name of the directory to clone into.").Default(".").String()
 
 	repo_re = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
@@ -34,12 +36,18 @@ func main() {
 	if m == nil {
 		kingpin.FatalUsage("repo must be in the format owner/repo")
 	}
-	if err := run(m[1], m[2], *dir); err != nil {
+	owner, name := m[1], m[2]
+	repos, err := queryRepos(owner, name)
+	if err != nil {
+		kingpin.FatalIfError(err, "")
+	}
+	if err := cloneRepos(repos, name, *dir); err != nil {
 		kingpin.FatalIfError(err, "")
 	}
 }
 
-type repoForksNode struct {
+type repoNode struct {
+	Name  githubql.String
 	URL   githubql.String
 	Owner struct {
 		Login githubql.String
@@ -47,11 +55,9 @@ type repoForksNode struct {
 }
 
 var repoForksQuery struct {
-	// https://developer.github.com/v4/reference/object/repository/
 	Repository struct {
-		Description githubql.String
-		Forks       struct {
-			Nodes    []repoForksNode
+		Forks struct {
+			Nodes    []repoNode
 			PageInfo struct {
 				EndCursor   githubql.String
 				HasNextPage githubql.Boolean
@@ -60,7 +66,19 @@ var repoForksQuery struct {
 	} `graphql:"repository(owner: $owner, name: $name)"`
 }
 
-func queryForks(owner, name string) ([]repoForksNode, error) {
+var orgReposQuery struct {
+	Organization struct {
+		Repositories struct {
+			Nodes    []repoNode
+			PageInfo struct {
+				EndCursor   githubql.String
+				HasNextPage githubql.Boolean
+			}
+		} `graphql:"repositories(first: 20, after: $commentsCursor)"`
+	} `graphql:"organization(login: $owner)"`
+}
+
+func newClient() (*githubql.Client, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		kingpin.Errorf("Set GITHUB_TOKEN to a personal access token https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/")
@@ -69,15 +87,47 @@ func queryForks(owner, name string) ([]repoForksNode, error) {
 		&oauth2.Token{AccessToken: token},
 	)
 	httpClient := oauth2.NewClient(context.Background(), src)
+	return githubql.NewClient(httpClient), nil
+}
 
-	client := githubql.NewClient(httpClient)
+func queryOrgRepos(owner, name string) ([]repoNode, error) {
+	client, err := newClient()
+	if err != nil {
+		return nil, err
+	}
+	variables := map[string]interface{}{
+		"owner":          githubql.String(owner),
+		"commentsCursor": (*githubql.String)(nil),
+	}
+	var repos []repoNode
+	hasNextPage := true
+	for hasNextPage {
+		if err := client.Query(context.Background(), &orgReposQuery, variables); err != nil {
+			return nil, err
+		}
+		for _, repo := range orgReposQuery.Organization.Repositories.Nodes {
+			if strings.HasPrefix(string(repo.Name), name+"-") {
+				repos = append(repos, repo)
+			}
+		}
+		variables["commentsCursor"] = githubql.NewString(orgReposQuery.Organization.Repositories.PageInfo.EndCursor)
+		hasNextPage = bool(orgReposQuery.Organization.Repositories.PageInfo.HasNextPage)
+	}
+	return repos, nil
+}
+
+func queryRepoForks(owner, name string) ([]repoNode, error) {
+	client, err := newClient()
+	if err != nil {
+		return nil, err
+	}
 	variables := map[string]interface{}{
 		"owner":          githubql.String(owner),
 		"name":           githubql.String(name),
 		"commentsCursor": (*githubql.String)(nil),
 	}
 
-	var repos []repoForksNode
+	var repos []repoNode
 	hasNextPage := true
 	for hasNextPage {
 		if err := client.Query(context.Background(), &repoForksQuery, variables); err != nil {
@@ -87,22 +137,28 @@ func queryForks(owner, name string) ([]repoForksNode, error) {
 		variables["commentsCursor"] = githubql.NewString(repoForksQuery.Repository.Forks.PageInfo.EndCursor)
 		hasNextPage = bool(repoForksQuery.Repository.Forks.PageInfo.HasNextPage)
 	}
-
 	return repos, nil
 }
 
-func run(owner, name, dir string) error {
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
+func queryRepos(owner, name string) ([]repoNode, error) {
+	if *classroom {
+		return queryOrgRepos(owner, name)
 	}
+	return queryRepoForks(owner, name)
+}
 
-	results := make(chan []byte, *jobs)
-	repos, err := queryForks(owner, name)
-	if err != nil {
-		return err
+func cloneRepos(repos []repoNode, name, dir string) error {
+	if !*dry_run {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			return err
+		}
 	}
+	results := make(chan []byte, *jobs)
 	for _, repo := range repos {
 		dst := filepath.Join(dir, string(repo.Owner.Login))
+		if *classroom {
+			dst = filepath.Join(dir, dst, string(repo.Name)[len(name)+1:])
+		}
 		go func(url, dst string) {
 			args := []string{"git", "clone", url, dst}
 			if *dry_run {

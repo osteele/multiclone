@@ -1,6 +1,6 @@
 Features:
-* GitHub classroom
 * create .mrconfig
 
+Robustness:
 * error handling
 * recognize rate limits

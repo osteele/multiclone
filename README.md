@@ -1,12 +1,30 @@
 # Multiclone
 
-Clone all the forks of a repository. Useful for collecting and reviewing
+Clone all the forks of a repository, or all the repos of a [GitHub Classroom](https://classroom.github.com) assignment.
+
+Repos are cloned in parallel.
+
+This is useful for collecting and reviewing
 assignments and student projects.
 
 ## Usage
 
-    multiclone https://github.com/owner/repo [directory]
-    multiclone owner/repo [directory]
+    multiclone https://github.com/owner/repo [DIR]
+    multiclone owner/repo [DIR]
+
+Clone forks of owner/repo into DIR (or the current directory).
+
+### GitHub Classroom
+
+    multiclone https://github.com/owner/repo [DIR] --classroom
+    multiclone org/repo [DIR] --classroom
+
+Clone org's repos named repo-* into DIR (or the current directory).
+
+This is intended for use with repos created via [GitHub Classroom](https://classroom.github.com).
+
+### Usage
+
     multiclone --help
 
 ## Install
