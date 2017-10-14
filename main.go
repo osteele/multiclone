@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -172,7 +171,8 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			return err
 		}
 	}
-	results := make(chan []byte, *jobs)
+	var errors = make(chan error, *jobs)
+	var outputs = make(chan []byte, *jobs)
 	for _, repo := range repos {
 		dst := filepath.Join(dir, repoLocalBasename(repo, name))
 		go func(url, dst string) {
@@ -184,14 +184,26 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
 				// FIXME send to main thread
-				log.Fatal(err)
+				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, repo.URL)
+			} else {
+				outputs <- bytes.TrimSpace(stdoutStderr)
 			}
-			results <- bytes.TrimSpace(stdoutStderr)
 		}(string(repo.URL), dst)
 	}
-
-	for n := len(repos); n > 0; n-- {
-		fmt.Printf("%s\n", <-results)
+	errorCount := 0
+	for n := len(repos); n > 0; {
+		select {
+		case output := <-outputs:
+			n--
+			fmt.Printf("%s\n", output)
+		case err := <-errors:
+			fmt.Fprintf(os.Stderr, "%s\n", err)
+			n--
+			errorCount++
+		}
+	}
+	if errorCount > 0 {
+		return fmt.Errorf("one or more clones failed")
 	}
 	return nil
 }
