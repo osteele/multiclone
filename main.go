@@ -171,11 +171,14 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			return err
 		}
 	}
+	var sem = make(chan bool, *jobs)
 	var errors = make(chan error, *jobs)
 	var outputs = make(chan []byte, *jobs)
 	for _, repo := range repos {
 		dst := filepath.Join(dir, repoLocalBasename(repo, name))
 		go func(url, dst string) {
+			sem <- true
+			defer func() { <-sem }()
 			args := []string{"git", "clone", url, dst}
 			if *dry_run {
 				args = append([]string{"echo"}, args...)
@@ -183,7 +186,6 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			cmd := exec.Command(args[0], args[1:]...)
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
-				// FIXME send to main thread
 				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, repo.URL)
 			} else {
 				outputs <- bytes.TrimSpace(stdoutStderr)
