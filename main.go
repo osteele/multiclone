@@ -61,8 +61,12 @@ var repoForksQuery struct {
 }
 
 func queryForks(owner, name string) ([]repoForksNode, error) {
+	token := os.Getenv("GITHUB_TOKEN")
+	if token == "" {
+		kingpin.Errorf("Set GITHUB_TOKEN to a personal access token https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/")
+	}
 	src := oauth2.StaticTokenSource(
-		&oauth2.Token{AccessToken: os.Getenv("GITHUB_TOKEN")},
+		&oauth2.Token{AccessToken: token},
 	)
 	httpClient := oauth2.NewClient(context.Background(), src)
 
