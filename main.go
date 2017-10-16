@@ -18,14 +18,14 @@ import (
 )
 
 var (
-	dry_run   = kingpin.Flag("dry-run", "Dry run").Bool()
+	dryRun    = kingpin.Flag("dry-run", "Dry run").Bool()
 	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
 	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
 	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Bool()
 	nwo       = kingpin.Arg("repo", "GitHub owner/repo").String()
 	dir       = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
 
-	repo_re = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
+	repoRE = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
 
 func main() {
@@ -33,7 +33,7 @@ func main() {
 	if *nwo == "" {
 		kingpin.FatalUsage("repo is a required argument")
 	}
-	m := repo_re.FindStringSubmatch(*nwo)
+	m := repoRE.FindStringSubmatch(*nwo)
 	if m == nil {
 		kingpin.FatalUsage("repo must be in the format owner/repo")
 	}
@@ -166,7 +166,7 @@ func repoLocalBasename(repo repoNode, name string) string {
 }
 
 func cloneRepos(repos []repoNode, name, dir string) error {
-	if !*dry_run {
+	if !*dryRun {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
 		}
@@ -180,13 +180,13 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			sem <- true
 			defer func() { <-sem }()
 			args := []string{"git", "clone", url, dst}
-			if *dry_run {
+			if *dryRun {
 				args = append([]string{"echo"}, args...)
 			}
 			cmd := exec.Command(args[0], args[1:]...)
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
-				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, repo.URL)
+				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, url)
 			} else {
 				outputs <- bytes.TrimSpace(stdoutStderr)
 			}
