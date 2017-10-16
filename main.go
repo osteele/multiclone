@@ -21,7 +21,7 @@ var (
 	dryRun    = kingpin.Flag("dry-run", "Dry run").Bool()
 	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
 	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
-	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Bool()
+	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Default("true").Bool()
 	nwo       = kingpin.Arg("repo", "GitHub owner/repo").String()
 	dir       = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
 
@@ -212,6 +212,10 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 
 func writeMrConfig(repos []repoNode, name, dir string) error {
 	dst := filepath.Join(dir, ".mrconfig")
+	if *dryRun {
+		fmt.Println("create", dst)
+		return nil
+	}
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0666)
 	if err != nil {
 		return err

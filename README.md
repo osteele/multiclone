@@ -9,6 +9,7 @@ Features:
 * Written in Golang for easier distribution. (I got tired juggling of juggling Anaconda / virtualenv between various classroom and tool environments.)
 * Automatic repo discovery. Knows about “students fork” and “GitHub Classroom” conventions.
 * Repos are cloned in parallel.
+* Create a [myrepos](https://myrepos.branchable.com) `.mrconfig` file.
 
 ## Usage
 
@@ -32,13 +33,9 @@ This is intended for use with repos created via [GitHub Classroom](https://class
 
 See the `git` commands that would be run, without actually running them.
 
-    multiclone owner/repo [DIR] --mrconfig
-
-Write a [myrepos](https://myrepos.branchable.com) `.mrconfig` file into the target directory.
-
     multiclone --help
 
-More options.
+Lists additional options.
 
 ## Install
 
