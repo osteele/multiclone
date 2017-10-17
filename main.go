@@ -171,9 +171,11 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			return err
 		}
 	}
-	var sem = make(chan bool, *jobs)
-	var errors = make(chan error, *jobs)
-	var outputs = make(chan []byte, *jobs)
+	var (
+		sem     = make(chan bool, *jobs)
+		errors  = make(chan error, 1)
+		outputs = make(chan []byte, 1)
+	)
 	for _, repo := range repos {
 		dst := filepath.Join(dir, repoLocalBasename(repo, name))
 		go func(url, dst string) {
@@ -182,6 +184,7 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			args := []string{"git", "clone", url, dst}
 			if *dryRun {
 				args = append([]string{"echo"}, args...)
+				// time.Sleep(time.Second)
 			}
 			cmd := exec.Command(args[0], args[1:]...)
 			stdoutStderr, err := cmd.CombinedOutput()
@@ -213,7 +216,7 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 func writeMrConfig(repos []repoNode, name, dir string) error {
 	dst := filepath.Join(dir, ".mrconfig")
 	if *dryRun {
-		fmt.Println("create", dst)
+		fmt.Println("writing", dst)
 		return nil
 	}
 	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0666)
