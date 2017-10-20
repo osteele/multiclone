@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,9 +17,11 @@ var (
 	dryRun    = kingpin.Flag("dry-run", "Dry run").Bool()
 	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
 	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
+	verbose   = kingpin.Flag("verbose", "Verbose").Bool()
 	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Default("true").Bool()
-	nwo       = kingpin.Arg("repo", "GitHub owner/repo").String()
-	dir       = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
+
+	nwo = kingpin.Arg("repo", "GitHub owner/repo").String()
+	dir = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
 
 	repoRE = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
@@ -38,16 +41,24 @@ func main() {
 	}
 }
 
+type repoEntry struct {
+	Dir, URL string
+}
+
 func run(owner, name string) error {
 	repos, err := queryRepos(owner, name)
 	if err != nil {
 		return err
 	}
-	if err := cloneRepos(repos, name, *dir); err != nil {
+	var entries []repoEntry
+	for _, repo := range repos {
+		entries = append(entries, repoEntry{Dir: repoLocalBasename(repo, name), URL: string(repo.URL)})
+	}
+	if err := cloneRepos(entries, *dir); err != nil {
 		return err
 	}
 	if *mrconfig {
-		return writeMrConfig(repos, name, *dir)
+		return writeMrConfig(entries, *dir)
 	}
 	return nil
 }
@@ -66,7 +77,7 @@ func repoLocalBasename(repo repoNode, name string) string {
 	return string(repo.Owner.Login)
 }
 
-func cloneRepos(repos []repoNode, name, dir string) error {
+func cloneRepos(repos []repoEntry, dir string) error {
 	if !*dryRun {
 		if err := os.MkdirAll(dir, 0700); err != nil {
 			return err
@@ -78,11 +89,11 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 		outputs = make(chan []byte, 1)
 	)
 	for _, repo := range repos {
-		dst := filepath.Join(dir, repoLocalBasename(repo, name))
-		go func(url, dst string) {
+		go func(repo repoEntry) {
 			sem <- true
 			defer func() { <-sem }()
-			args := []string{"git", "clone", url, dst}
+			// dst := filepath.Join(dir, repo.owner)
+			args := []string{"git", "clone", repo.URL, repo.Dir}
 			if *dryRun {
 				args = append([]string{"echo"}, args...)
 				// time.Sleep(time.Second)
@@ -90,11 +101,11 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 			cmd := exec.Command(args[0], args[1:]...)
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
-				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, url)
+				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, repo.URL)
 			} else {
 				outputs <- bytes.TrimSpace(stdoutStderr)
 			}
-		}(string(repo.URL), dst)
+		}(repo)
 	}
 	errorCount := 0
 	for n := len(repos); n > 0; {
@@ -114,26 +125,23 @@ func cloneRepos(repos []repoNode, name, dir string) error {
 	return nil
 }
 
-func writeMrConfig(repos []repoNode, name, dir string) error {
+func writeMrConfig(repos []repoEntry, dir string) error {
 	dst := filepath.Join(dir, ".mrconfig")
+	f := ioutil.Discard
 	if *dryRun {
 		fmt.Println("writing", dst)
-		return nil
+	} else {
+		f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0666)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
 	}
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0666)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 
-	type RepoEntry struct {
-		Dir, URL string
+	if *verbose {
+		mrConfigTpl.Execute(os.Stdout, repos)
 	}
-	var repoEntries []RepoEntry
-	for _, repo := range repos {
-		repoEntries = append(repoEntries, RepoEntry{Dir: repoLocalBasename(repo, name), URL: string(repo.URL)})
-	}
-	return mrConfigTpl.Execute(f, repoEntries)
+	return mrConfigTpl.Execute(f, repos)
 }
 
 var mrConfigTpl = template.Must(template.New("mrconfig").Parse(`
