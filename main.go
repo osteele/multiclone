@@ -52,7 +52,7 @@ func run(owner, name string) error {
 	}
 	var entries []repoEntry
 	for _, repo := range repos {
-		entries = append(entries, repoEntry{Dir: repoLocalBasename(repo, name), URL: string(repo.URL)})
+		entries = append(entries, repoEntry{Dir: repoAuthor(repo, name), URL: repo.URL})
 	}
 	if err := cloneRepos(entries, *dir); err != nil {
 		return err
@@ -63,18 +63,24 @@ func run(owner, name string) error {
 	return nil
 }
 
-func queryRepos(owner, name string) ([]repoNode, error) {
-	if *classroom {
-		return queryOrgRepos(owner, name)
+func queryRepos(owner, name string) ([]repoRecord, error) {
+	client, err := newClient()
+	if err != nil {
+		return nil, err
 	}
-	return queryRepoForks(owner, name)
+	switch *classroom {
+	case true:
+		return client.queryOrgRepos(owner, name)
+	default:
+		return client.queryRepoForks(owner, name)
+	}
 }
 
-func repoLocalBasename(repo repoNode, name string) string {
+func repoAuthor(repo repoRecord, name string) string {
 	if *classroom {
-		return string(repo.Name)[len(name)+1:]
+		return repo.Name[len(name)+1:]
 	}
-	return string(repo.Owner.Login)
+	return repo.Owner
 }
 
 func cloneRepos(repos []repoEntry, dir string) error {

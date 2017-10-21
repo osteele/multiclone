@@ -10,6 +10,16 @@ import (
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
+type GitHubClient struct {
+	c *githubql.Client
+}
+
+type repoRecord struct {
+	Name  string
+	Owner string
+	URL   string
+}
+
 type repoNode struct {
 	Name  githubql.String
 	URL   githubql.String
@@ -42,7 +52,7 @@ var orgReposQuery struct {
 	} `graphql:"organization(login: $owner)"`
 }
 
-func newClient() (*githubql.Client, error) {
+func newClient() (GitHubClient, error) {
 	token := os.Getenv("GITHUB_TOKEN")
 	if token == "" {
 		kingpin.Errorf("Set GITHUB_TOKEN to a personal access token https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/")
@@ -51,19 +61,16 @@ func newClient() (*githubql.Client, error) {
 		&oauth2.Token{AccessToken: token},
 	)
 	httpClient := oauth2.NewClient(context.Background(), src)
-	return githubql.NewClient(httpClient), nil
+	return GitHubClient{githubql.NewClient(httpClient)}, nil
 }
 
-func queryOrgRepos(owner, name string) ([]repoNode, error) {
-	client, err := newClient()
-	if err != nil {
-		return nil, err
-	}
+func (c GitHubClient) queryOrgRepos(owner, name string) ([]repoRecord, error) {
+	client := c.c
 	variables := map[string]interface{}{
 		"owner":          githubql.String(owner),
 		"commentsCursor": (*githubql.String)(nil),
 	}
-	var repos []repoNode
+	var repos []repoRecord
 	hasNextPage := true
 	for hasNextPage {
 		if err := client.Query(context.Background(), &orgReposQuery, variables); err != nil {
@@ -71,7 +78,7 @@ func queryOrgRepos(owner, name string) ([]repoNode, error) {
 		}
 		for _, repo := range orgReposQuery.Organization.Repositories.Nodes {
 			if strings.HasPrefix(string(repo.Name), name+"-") {
-				repos = append(repos, repo)
+				repos = append(repos, repoRecord{Name: string(repo.Name), Owner: string(repo.Owner.Login), URL: string(repo.URL)})
 			}
 		}
 		variables["commentsCursor"] = githubql.NewString(orgReposQuery.Organization.Repositories.PageInfo.EndCursor)
@@ -80,24 +87,23 @@ func queryOrgRepos(owner, name string) ([]repoNode, error) {
 	return repos, nil
 }
 
-func queryRepoForks(owner, name string) ([]repoNode, error) {
-	client, err := newClient()
-	if err != nil {
-		return nil, err
-	}
+func (c GitHubClient) queryRepoForks(owner, name string) ([]repoRecord, error) {
+	client := c.c
 	variables := map[string]interface{}{
 		"owner":          githubql.String(owner),
 		"name":           githubql.String(name),
 		"commentsCursor": (*githubql.String)(nil),
 	}
 
-	var repos []repoNode
+	var repos []repoRecord
 	hasNextPage := true
 	for hasNextPage {
 		if err := client.Query(context.Background(), &repoForksQuery, variables); err != nil {
 			return nil, err
 		}
-		repos = append(repos, repoForksQuery.Repository.Forks.Nodes...)
+		for _, repo := range repoForksQuery.Repository.Forks.Nodes {
+			repos = append(repos, repoRecord{Name: string(repo.Name), Owner: string(repo.Owner.Login), URL: string(repo.URL)})
+		}
 		variables["commentsCursor"] = githubql.NewString(repoForksQuery.Repository.Forks.PageInfo.EndCursor)
 		hasNextPage = bool(repoForksQuery.Repository.Forks.PageInfo.HasNextPage)
 	}
