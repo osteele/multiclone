@@ -50,6 +50,13 @@ func run(owner, name string) error {
 	if err != nil {
 		return err
 	}
+	if len(repos) == 0 {
+		prep := "with"
+		if *classroom {
+			prep = "without"
+		}
+		fmt.Fprintf(os.Stderr, "No entries. Try again %s the --classroom option.\n", prep)
+	}
 	var entries []repoEntry
 	for _, repo := range repos {
 		entries = append(entries, repoEntry{Dir: repoAuthor(repo, name), URL: repo.URL})
