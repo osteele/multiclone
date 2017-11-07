@@ -13,23 +13,31 @@ Features:
 
 ## Usage
 
-    multiclone https://github.com/owner/repo [DIR]
-    multiclone owner/repo [DIR]
+    multiclone https://github.com/owner/repo
+    multiclone owner/repo
 
-Clone forks of owner/repo into DIR (or the current directory).
+Clone forks of owner/repo into the current directory.
+
+    multiclone repos.txt
+
+`repos.txt` is a file with one repo name per line.
 
 ### GitHub Classroom
 
-    multiclone https://github.com/owner/repo [DIR] --classroom
-    multiclone org/repo [DIR] --classroom
+    multiclone https://github.com/owner/repo --classroom
+    multiclone org/repo --classroom
 
-Clone org's repos named repo-* into DIR (or the current directory).
+Clone org's repos named repo-* into the current directory.
 
 This is intended for use with repos created via [GitHub Classroom](https://classroom.github.com).
 
 ### Options
 
-    multiclone owner/repo [DIR] --dry-run
+    multiclone --dir path/to/dir owner/repo
+
+Clone into subdirectories of `path/to/dir`, instead of the current directory.
+
+    multiclone owner/repo --dry-run
 
 See the `git` commands that would be run, without actually running them.
 

@@ -1,2 +1,0 @@
-Features:
-* read from text list of student repos

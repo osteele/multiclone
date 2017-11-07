@@ -8,41 +8,69 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"text/template"
 
 	kingpin "gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
+	dir       = kingpin.Flag("dir", "The name of the directory to clone into").Short('d').Default(".").String()
 	dryRun    = kingpin.Flag("dry-run", "Dry run").Bool()
+	reposFile = kingpin.Flag("file", "Repo is GitHub classroom repo").Short('f').ExistingFile()
 	classroom = kingpin.Flag("classroom", "Repo is GitHub classroom repo").Bool()
 	jobs      = kingpin.Flag("jobs", "The number of repos fetched at the same time").Short('j').Default("8").Int()
 	verbose   = kingpin.Flag("verbose", "Verbose").Bool()
 	mrconfig  = kingpin.Flag("mrconfig", "Create a myrepos .mrconfig file in the output directory").Default("true").Bool()
 
 	nwo = kingpin.Arg("repo", "GitHub owner/repo").String()
-	dir = kingpin.Arg("directory", "The name of the directory to clone into").Default(".").String()
 
 	repoRE = regexp.MustCompile(`^(?:https://github\.com/)?([^/]+)/([^/]+)$`)
 )
 
 func main() {
 	kingpin.Parse()
-	if *nwo == "" {
+	switch {
+	case *reposFile == "" && *nwo == "":
 		kingpin.FatalUsage("repo is a required argument")
-	}
-	m := repoRE.FindStringSubmatch(*nwo)
-	if m == nil {
-		kingpin.FatalUsage("repo must be in the format owner/repo")
-	}
-	owner, name := m[1], m[2]
-	if err := run(owner, name); err != nil {
-		kingpin.FatalIfError(err, "")
+
+	case *reposFile != "" && *nwo != "":
+		kingpin.FatalUsage("--file and repo are exclusive")
+	case *nwo != "":
+		m := repoRE.FindStringSubmatch(*nwo)
+		if m == nil {
+			kingpin.FatalUsage("repo must be in the format owner/repo")
+		}
+		owner, name := m[1], m[2]
+		kingpin.FatalIfError(run(owner, name), "")
+	case *reposFile != "":
+		kingpin.FatalIfError(runWithFiles(*reposFile), "")
 	}
 }
 
 type repoEntry struct {
 	Dir, URL string
+}
+
+func runWithFiles(reposFile string) error {
+	dat, err := ioutil.ReadFile(reposFile)
+	if err != nil {
+		return err
+	}
+	var entries []repoEntry
+	re := regexp.MustCompile(`(?m)^(?:https://github\.com/)?([^/]+)/(.+?)(?:\.git)?\s*(?:#.*)?$`)
+	for _, m := range re.FindAllStringSubmatch(string(dat), -1) {
+		entries = append(entries, repoEntry{Dir: m[1], URL: strings.TrimSpace(m[0])})
+	}
+	if err := cloneRepos(entries, *dir); err != nil {
+		return err
+	}
+	if *mrconfig {
+		if err := writeMrConfig(entries, *dir); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func run(owner, name string) error {
@@ -56,6 +84,7 @@ func run(owner, name string) error {
 			prep = "without"
 		}
 		fmt.Fprintf(os.Stderr, "No entries. Try again %s the --classroom option.\n", prep)
+		return nil
 	}
 	var entries []repoEntry
 	for _, repo := range repos {
@@ -84,10 +113,12 @@ func queryRepos(owner, name string) ([]repoRecord, error) {
 }
 
 func repoAuthor(repo repoRecord, name string) string {
-	if *classroom {
+	switch *classroom {
+	case true:
 		return repo.Name[len(name)+1:]
+	default:
+		return repo.Owner
 	}
-	return repo.Owner
 }
 
 func cloneRepos(repos []repoEntry, dir string) error {
@@ -105,13 +136,13 @@ func cloneRepos(repos []repoEntry, dir string) error {
 		go func(repo repoEntry) {
 			sem <- true
 			defer func() { <-sem }()
-			// dst := filepath.Join(dir, repo.owner)
 			args := []string{"git", "clone", repo.URL, repo.Dir}
 			if *dryRun {
 				args = append([]string{"echo"}, args...)
 				// time.Sleep(time.Second)
 			}
 			cmd := exec.Command(args[0], args[1:]...)
+			cmd.Dir = dir
 			stdoutStderr, err := cmd.CombinedOutput()
 			if err != nil {
 				errors <- fmt.Errorf("%s: %s while trying to clone %s", err, stdoutStderr, repo.URL)
