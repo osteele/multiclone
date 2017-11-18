@@ -1,0 +1,20 @@
+project_name: multiclone
+builds:
+  - binary: multiclone
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+archive:
+  format: tar.gz
+  replacements:
+    amd64: 64-bit
+    darwin: macOS
+brew:
+  github:
+    owner: osteele
+    name: homebrew-tap
+  homepage: https://github.com/osteele/multiclone
+  description: "Clone forks of a GitHub repo, or copies of a GitHub classroom assignment."

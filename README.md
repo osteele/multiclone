@@ -11,6 +11,26 @@ Features:
 * Repos are cloned in parallel.
 * Create a [myrepos](https://myrepos.branchable.com) `.mrconfig` file.
 
+## Installation
+
+### Install multiclone
+
+multiclone is written in Go with support for multiple platforms.
+The latest release can be found at the [releases page](https://github.com/osteele/multiclone/releases).
+
+[Homebrew](https://brew.sh) can be used to install multiclone on macOS:
+
+```bash
+$ brew tap osteele/homebrew-tap
+$ brew install multiclone
+```
+
+### Set `GITHUB_TOKEN`
+
+Create a [GitHub personal access token for the command line](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
+
+Set `GITHUB_TOKEN` to this value: `export GITHUB_TOKEN=…`
+
 ## Usage
 
     multiclone https://github.com/owner/repo
@@ -20,7 +40,9 @@ Clone forks of owner/repo into the current directory.
 
     multiclone repos.txt
 
-`repos.txt` is a file with one repo name per line.
+Clones the repo
+
+`repos.txt` is a file with one repo name-with-owner, e.g. `osteele/homework1`, per line.
 
 ### GitHub Classroom
 
@@ -45,12 +67,10 @@ See the `git` commands that would be run, without actually running them.
 
 Lists additional options.
 
-## Install
+## Develop
 
 1. **Install go** (1) via [Homebrew](https://brew.sh): `brew install go`; or (2) [download](https://golang.org/doc/install#tarball).
 2. `go install github.com/osteele/multiclone`
-3. Create a [GitHub personal access token for the command line](https://help.github.com/articles/creating-a-personal-access-token-for-the-command-line/)
-4. Set `GITHUB_TOKEN` to this value: `export GITHUB_TOKEN=…`
 
 ## Alternatives
 
