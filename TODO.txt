@@ -1,0 +1,4 @@
+* add --version
+* maybe don't overwrite existing .mrconfig
+* add update subcommand
+* tests, of course
